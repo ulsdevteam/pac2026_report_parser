@@ -2,8 +2,9 @@ import sys, json;
 report = json.load(sys.stdin)
 output = {
   "metadata": {
-    "title": report[0]["blocks"][7]["lines"][0]["spans"][0]["text"],
-    "language": report[0]["blocks"][7]["lines"][4]["spans"][0]["text"],
+    "title": report[0]["blocks"][6]["lines"][1]["spans"][0]["text"],
+    "filename": report[0]["blocks"][6]["lines"][3]["spans"][0]["text"],
+    "language": report[0]["blocks"][6]["lines"][5]["spans"][0]["text"],
   },
 
   "checks": {
