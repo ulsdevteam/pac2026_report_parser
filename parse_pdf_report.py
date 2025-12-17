@@ -1,78 +1,48 @@
-import sys, json;
-report = json.load(sys.stdin)
-output = {
-  "metadata": {
-    "title": report[0]["blocks"][6]["lines"][1]["spans"][0]["text"],
-    "filename": report[0]["blocks"][6]["lines"][3]["spans"][0]["text"],
-    "language": report[0]["blocks"][6]["lines"][5]["spans"][0]["text"],
-  },
+import sys, json, re
 
-  "checks": {
-      "pdf_syntax": {
-          "success": report[0]["blocks"][2]["lines"][0]["spans"][2]["text"],
-          "warning": report[0]["blocks"][2]["lines"][0]["spans"][4]["text"],
-          "failure": report[0]["blocks"][2]["lines"][0]["spans"][6]["text"],
-      },
-      "fonts": {
-          "success": report[0]["blocks"][2]["lines"][1]["spans"][2]["text"],
-          "warning": report[0]["blocks"][2]["lines"][1]["spans"][4]["text"],
-          "failure": report[0]["blocks"][2]["lines"][1]["spans"][6]["text"],
-      },
-      "content": {
-          "success": report[0]["blocks"][2]["lines"][2]["spans"][2]["text"],
-          "warning": report[0]["blocks"][2]["lines"][2]["spans"][4]["text"],
-          "failure": report[0]["blocks"][2]["lines"][2]["spans"][6]["text"],
-      },
-      "embedded_files": {
-          "success": report[0]["blocks"][2]["lines"][3]["spans"][2]["text"],
-          "warning": report[0]["blocks"][2]["lines"][3]["spans"][4]["text"],
-          "failure": report[0]["blocks"][2]["lines"][3]["spans"][6]["text"],
-      },
-      "natural_language": {
-          "success": report[0]["blocks"][2]["lines"][4]["spans"][2]["text"],
-          "warning": report[0]["blocks"][2]["lines"][4]["spans"][4]["text"],
-          "failure": report[0]["blocks"][2]["lines"][4]["spans"][6]["text"],
-      },
+def success_warning_failure(key, source):
+    """ For CHECKPOINT PASSED WARNED FAILED lines in the source, extract as dictionaries, adding a Total """
+    regexp = re.compile(rf'^{key}\s+(-|[0-9]+)\s+(-|[0-9]+)\s+(-|[0-9]+)$', re.MULTILINE)
+    matches = regexp.search(source)
+    keys = ['Success', 'Warning', 'Failure']
+    if matches:
+        total = 0
+        out = {}
+        for index, name in enumerate(keys):
+            value = 0 if matches.group(index + 1) == '-' else int(matches.group(index + 1))
+            out[name] = value
+            total += value
+        out['Total'] = total
+        return out
+    else:
+        return None
 
-     "structural_elements": {
-          "success": report[0]["blocks"][3]["lines"][0]["spans"][2]["text"],
-          "warning": report[0]["blocks"][3]["lines"][0]["spans"][4]["text"],
-          "failure": report[0]["blocks"][3]["lines"][0]["spans"][6]["text"],
-      },
-      "structure_tree": {
-          "success": report[0]["blocks"][3]["lines"][1]["spans"][2]["text"],
-          "warning": report[0]["blocks"][3]["lines"][1]["spans"][4]["text"],
-          "failure": report[0]["blocks"][3]["lines"][1]["spans"][6]["text"],
-      },
-      "role_mapping": {
-          "success": report[0]["blocks"][3]["lines"][2]["spans"][2]["text"],
-          "warning": report[0]["blocks"][3]["lines"][2]["spans"][4]["text"],
-          "failure": report[0]["blocks"][3]["lines"][2]["spans"][6]["text"],
-      },
-      "alternative_descriptions": {
-          "success": report[0]["blocks"][3]["lines"][3]["spans"][2]["text"],
-          "warning": report[0]["blocks"][3]["lines"][3]["spans"][4]["text"],
-          "failure": report[0]["blocks"][3]["lines"][3]["spans"][6]["text"],
-      },
+def text_between(start, end, source):
+    """ Given a regex for patterns before and after a string in the source, return the content between the regexs """
+    regexp = re.compile(rf'{start}(.*?){end}', re.MULTILINE | re.DOTALL)
+    matches = regexp.search(source)
+    if matches:
+        return ''.join(matches.group(1).splitlines())
+    return None
 
-      "metadata": {
-          "success": report[0]["blocks"][4]["lines"][0]["spans"][2]["text"],
-          "warning": report[0]["blocks"][4]["lines"][0]["spans"][4]["text"],
-          "failure": report[0]["blocks"][4]["lines"][0]["spans"][6]["text"],
-      },
-      "document_settings": {
-          "success": report[0]["blocks"][4]["lines"][1]["spans"][2]["text"],
-          "warning": report[0]["blocks"][4]["lines"][1]["spans"][4]["text"],
-          "failure": report[0]["blocks"][4]["lines"][1]["spans"][6]["text"],
-      },
-  }
-}
-for check, statuses in output["checks"].items():
-    total = 0
-    for status, value in statuses.items():
-        value = 0 if value == "-" else int(value)
-        statuses[status] = value
-        total += value
-    statuses["total"] = total
-print(json.dumps(output))
+def main():
+    """ Given the pdftext output of a PAC 2026 PDF, find interesting metrics and reformat them as JSON """
+    """ The JSON will have two sections: metadata as key-value pairs, and checks as success/wanring/failure/total counts """
+    report = sys.stdin.read()
+    checks = [ "PDF Syntax", "Fonts", "Content", "Embedded Files", "Natural language", "Structure elements", "Structure tree", "Role mapping", "Alternative Descriptions", "Metadata", "Document settings" ]
 
+    output = {'checks': {} }
+    for check in checks:
+        result = success_warning_failure(check, report)
+        if result:
+            output['checks'][check] = result
+    output['metadata'] = {
+        'Title': text_between('^Title$', '^Filename$', report),
+        'Filename': text_between('^Filename$', '^Language Tags Pages Size$', report),
+        'Language': text_between('^Language Tags Pages Size$', ' [0-9(-]+', report),
+        'PDF/UA': 'Yes' if report.find("This PDF file is PDF/UA compliant.") != -1 else 'No'
+    }
+    print(json.dumps(output))
+
+if __name__ == '__main__':
+    main()
