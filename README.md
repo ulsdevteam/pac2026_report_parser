@@ -9,8 +9,15 @@ pip install pdftext
 ```
 
 ### Usage
+
+#### Output JSON
 ```
-pdftext --json [filename] | python parse_pdf_report.py
+pdftext [filename] | python parse_pdf_report.py
+```
+
+#### Output CSV
+```
+pdftext [filename] | python parse_pdf_report.py | python reformat_parsed_report.py
 ```
 
 Copyright 2025, University of Pittsburgh, University Library System
